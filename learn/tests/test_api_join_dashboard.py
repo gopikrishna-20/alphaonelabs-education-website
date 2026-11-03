@@ -188,25 +188,33 @@ class TestApiDashboard:
     async def test_hosted_activities_returned(self):
         tok = _token(uid="host-1", role="host")
         hosted_row = MockRow(
-            id="act-1", title="My Course", type="course",
+            id="act-1", title="My Course",
+            description=_enc("Learn things"),
+            slug="my-course", type="course",
             format="self_paced", schedule_type="ongoing",
             participant_count=3, session_count=1,
             created_at="2024-01-01",
         )
         env = make_env(db=MockDB([
-            make_stmt(all_results=[hosted_row]),  # hosted query
-            make_stmt(all_results=[]),             # tags for act-1
-            make_stmt(all_results=[]),             # joined query
+            make_stmt(all_results=[hosted_row]),                    # hosted query
+            make_stmt(all_results=[MockRow(name="Python")]),        # tags for act-1
+            make_stmt(all_results=[]),                              # joined query
         ]))
         r = await worker.api_dashboard(self._req(tok), env)
         data = _parse(r)
         assert len(data["hosted_activities"]) == 1
-        assert data["hosted_activities"][0]["title"] == "My Course"
+        act = data["hosted_activities"][0]
+        assert act["title"] == "My Course"
+        assert act["description"] == "Learn things"
+        assert act["slug"] == "my-course"
+        assert act["tags"] == ["Python"]
 
     async def test_joined_activities_returned(self):
         tok = _token(uid="member-1")
         joined_row = MockRow(
-            id="act-1", title="Python 101", type="course",
+            id="act-1", title="Python 101",
+            description=_enc("Intro to Python"),
+            slug="python-101", type="course",
             format="self_paced", schedule_type="ongoing",
             enr_role="participant", enr_status="active",
             host_name_enc=_enc("Alice"),
@@ -215,12 +223,15 @@ class TestApiDashboard:
         env = make_env(db=MockDB([
             make_stmt(all_results=[]),              # hosted query (empty)
             make_stmt(all_results=[joined_row]),    # joined query
-            make_stmt(all_results=[]),              # tags for act-1
+            make_stmt(all_results=[MockRow(name="Python")]),  # tags for act-1
         ]))
         r = await worker.api_dashboard(self._req(tok), env)
         data = _parse(r)
         assert len(data["joined_activities"]) == 1
         act = data["joined_activities"][0]
         assert act["title"] == "Python 101"
+        assert act["description"] == "Intro to Python"
+        assert act["slug"] == "python-101"
         assert act["enr_role"] == "participant"
         assert act["host_name"] == "Alice"
+        assert act["tags"] == ["Python"]
